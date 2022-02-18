@@ -34,7 +34,7 @@ print(model)
 softmax = nn.Softmax(dim=1)
 
 training_data = datasets.COMMONVOICE(
-    root="/Volumes/External HD/cv-corpus-8.0-2022-01-19/zh-TW", tsv="train.tsv"
+    root="/Volumes/External HD/cv-corpus-8.0-2022-01-19/ar", tsv="train.tsv"
 )
 
 # sets a few paramaters for the training of the model
@@ -45,3 +45,5 @@ epochs = 5
 loss_fn = nn.CrossEntropyLoss()
 
 optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate)
+
+print(len(training_data))
