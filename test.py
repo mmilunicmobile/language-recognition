@@ -11,11 +11,21 @@ print(f"Using {device} device")
 class NeuralNetwork(nn.Module):
     def __init__(self):
         super().__init__()
+        self.flatten = nn.Flatten()
+        self.linear_relu_stack = nn.Sequential(
+            nn.Linear(28 * 28, 512),
+            nn.ReLU(),
+            nn.Linear(512, 512),
+            nn.ReLU(),
+            nn.Linear(512, 10),
+        )
 
     def forward(self, x):
         pass
 
 
-training_data = datasets.COMMONVOICE(root="ml", tsv="train.tsv")
+training_data = datasets.COMMONVOICE(
+    root="/Volumes/External HD/cv-corpus-8.0-2022-01-19/zh-TW", tsv="train.tsv"
+)
 
-print(next(iter(training_data))[2])
+print(next(iter(training_data))[2]["sentence"])
