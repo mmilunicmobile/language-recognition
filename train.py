@@ -1,11 +1,13 @@
 import torch
 from torch import nn
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Subset
 from torchaudio import datasets, transforms
+import torchaudio
 import torchvision
 import matplotlib.pyplot as plt
 import itertools
 import numpy as np
+import torch.nn.functional as F
 
 # creates a custom mod of the itertools.chain class. Has subscriptability and length defined
 class chain_subscript:
@@ -41,57 +43,32 @@ class language_classification(torch.utils.data.Dataset):
             "zh-TW": 4,
         }
 
-        if not testing:
-            self.en = datasets.COMMONVOICE(
-                root="/Volumes/External HD/cv-corpus-8.0-2022-01-19/en", tsv="train.tsv"
-            )
-            self.es = datasets.COMMONVOICE(
-                root="/Volumes/External HD/cv-corpus-8.0-2022-01-19/es", tsv="train.tsv"
-            )
-            self.fr = datasets.COMMONVOICE(
-                root="/Volumes/External HD/cv-corpus-8.0-2022-01-19/fr", tsv="train.tsv"
-            )
-            self.ar = datasets.COMMONVOICE(
-                root="/Volumes/External HD/cv-corpus-8.0-2022-01-19/ar", tsv="train.tsv"
-            )
-            self.zh_CN = datasets.COMMONVOICE(
-                root="/Volumes/External HD/cv-corpus-8.0-2022-01-19/zh-CN",
-                tsv="train.tsv",
-            )
-            self.zh_HK = datasets.COMMONVOICE(
-                root="/Volumes/External HD/cv-corpus-8.0-2022-01-19/zh-HK",
-                tsv="train.tsv",
-            )
-            self.zh_TW = datasets.COMMONVOICE(
-                root="/Volumes/External HD/cv-corpus-8.0-2022-01-19/zh-TW",
-                tsv="train.tsv",
-            )
-        else:
+        trast = "test.tsv" if testing else "train.tsv"  # to train or to test
 
-            self.en = datasets.COMMONVOICE(
-                root="/Volumes/External HD/cv-corpus-8.0-2022-01-19/en", tsv="test.tsv"
-            )
-            self.es = datasets.COMMONVOICE(
-                root="/Volumes/External HD/cv-corpus-8.0-2022-01-19/es", tsv="test.tsv"
-            )
-            self.fr = datasets.COMMONVOICE(
-                root="/Volumes/External HD/cv-corpus-8.0-2022-01-19/fr", tsv="test.tsv"
-            )
-            self.ar = datasets.COMMONVOICE(
-                root="/Volumes/External HD/cv-corpus-8.0-2022-01-19/ar", tsv="test.tsv"
-            )
-            self.zh_CN = datasets.COMMONVOICE(
-                root="/Volumes/External HD/cv-corpus-8.0-2022-01-19/zh-CN",
-                tsv="test.tsv",
-            )
-            self.zh_HK = datasets.COMMONVOICE(
-                root="/Volumes/External HD/cv-corpus-8.0-2022-01-19/zh-HK",
-                tsv="test.tsv",
-            )
-            self.zh_TW = datasets.COMMONVOICE(
-                root="/Volumes/External HD/cv-corpus-8.0-2022-01-19/zh-TW",
-                tsv="test.tsv",
-            )
+        self.en = datasets.COMMONVOICE(
+            root="/Volumes/External HD/cv-corpus-8.0-2022-01-19/en", tsv=trast
+        )
+        self.es = datasets.COMMONVOICE(
+            root="/Volumes/External HD/cv-corpus-8.0-2022-01-19/es", tsv=trast
+        )
+        self.fr = datasets.COMMONVOICE(
+            root="/Volumes/External HD/cv-corpus-8.0-2022-01-19/fr", tsv=trast
+        )
+        self.ar = datasets.COMMONVOICE(
+            root="/Volumes/External HD/cv-corpus-8.0-2022-01-19/ar", tsv=trast
+        )
+        self.zh_CN = datasets.COMMONVOICE(
+            root="/Volumes/External HD/cv-corpus-8.0-2022-01-19/zh-CN",
+            tsv=trast,
+        )
+        self.zh_HK = datasets.COMMONVOICE(
+            root="/Volumes/External HD/cv-corpus-8.0-2022-01-19/zh-HK",
+            tsv=trast,
+        )
+        self.zh_TW = datasets.COMMONVOICE(
+            root="/Volumes/External HD/cv-corpus-8.0-2022-01-19/zh-TW",
+            tsv=trast,
+        )
 
         self.data = chain_subscript(
             self.en, self.es, self.fr, self.ar, self.zh_CN, self.zh_HK, self.zh_TW
@@ -103,49 +80,53 @@ class language_classification(torch.utils.data.Dataset):
 
     # allows us to get the item at the index of the data (allows us to do most things)
     def __getitem__(self, index):
-        waveform, bitrate, target_plus = self.data[index]
+        waveform, sample_rate, target_plus = self.data[index]
 
         target = self.local_lookup[target_plus["locale"]]
 
-        waveform = torch.reshape(waveform, (1, waveform.shape[0]))
+        sound_data = torchaudio.transforms.Resample(sample_rate, 8000)(waveform)[0]
 
-        spectrogram = transforms.MelSpectrogram()(waveform)
+        temp_data = torch.zeros([40000])
 
-        spectrogram = spectrogram.repeat(3, 1, 1)
+        # formats the length of the data
+        if len(sound_data) < 40000:
+            # adds zeros if it is too short
+            temp_data[: len(sound_data)] = sound_data[:]
+        else:
+            temp_data[:] = sound_data[:40000]
 
-        spectrogram = np.transpose(spectrogram.numpy(), (1, 2, 0))
-        # spectrogram = self.aug(image=spectrogram)["image"]
+        sound_data = temp_data
 
-        spectrogram = np.transpose(spectrogram, (2, 0, 1)).astype(np.float32)
-
-        spectrogram = torchvision.transforms.ToPILImage()(spectrogram)
-
-        return {
-            "melspectrogram": torch.tensor(spectrogram, dtype=torch.float),
-            "target": torch.tensor(target, dtype=torch.float),
-        }
+        sound_formatted = torch.zeros([10000])
+        sound_formatted[:10000] = sound_data[::4]
+        sound_formatted = sound_formatted.reshape(1, 10000)
+        mel_spectrogram = transforms.MelSpectrogram(8000)(sound_formatted)
+        return mel_spectrogram, target
 
 
 # defines the neural network's shape
-class NeuralNetwork(nn.Module):
+class neural_network(nn.Module):
     def __init__(self):
         super().__init__()
-        self.layers = nn.Sequential(
-            torchvision.transforms.Resize(244),
-            nn.Flatten(),
-            nn.Linear(164736, 512),
+        self.flatten = nn.Flatten()
+        self.linear_relu_stack = nn.Sequential(
+            nn.Linear(6528, 2048),
+            nn.ReLU(),
+            nn.Linear(2048, 512),
             nn.ReLU(),
             nn.Linear(512, 512),
             nn.ReLU(),
-            nn.Linear(512, 5),
+            nn.Linear(512, 10),
         )
 
     def forward(self, x):
-        return self.layers(x)
+        x = self.flatten(x)
+        logits = self.linear_relu_stack(x)
+        return logits
 
 
 def train_loop(dataloader, model, loss_fn, optimizer):
-    size = dataloader.dataset
+    size = len(dataloader.dataset)
 
     for batch, data in enumerate(dataloader):
         # gets prediction from model and gets how correct it was
@@ -185,6 +166,10 @@ def test_loop(dataset, model, loss_fn):
         )
 
 
+def subsample_random(dataset, length):
+    return Subset(dataset, torch.randperm(len(dataset))[:length])
+
+
 if __name__ == "__main__":
     # switches to graphics card if I actually had a graphics card. Might be worth an investment
     device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -197,16 +182,18 @@ if __name__ == "__main__":
     batch_size = 1
     epochs = 5
 
-    training_data = language_classification()
-    testing_data = language_classification(True)
+    training_data = subsample_random(language_classification(), 10000)
+    testing_data = subsample_random(language_classification(True), 10000)
 
     training_data_loader = DataLoader(
-        training_data, batch_size=batch_size, shuffle=True
+        training_data,
+        batch_size=batch_size,
+        shuffle=True,
     )
     testing_data_loader = DataLoader(testing_data, batch_size=batch_size, shuffle=True)
 
     # sets the neuralnetwork to use "device" model
-    model = NeuralNetwork()
+    model = neural_network()
     print(model)
 
     loss_fn = nn.CrossEntropyLoss()
@@ -215,6 +202,10 @@ if __name__ == "__main__":
     for t in range(epochs):
         print(f"Starting epoch {t}")
         train_loop(training_data_loader, model, loss_fn, optimizer)
-        # test_loop(testing_data_loader, model, loss_fn)
+        test_loop(testing_data_loader, model, loss_fn)
 
     print("Done learning!")
+
+    torch.save(model.state_dict(), "model.pth")
+
+    print("Saved")
