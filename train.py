@@ -9,6 +9,7 @@ import itertools
 import numpy as np
 import torch.nn.functional as F
 
+
 # creates a custom mod of the itertools.chain class. Has subscriptability and length defined
 class chain_subscript:
     def __init__(self, *iterables):
@@ -182,7 +183,7 @@ if __name__ == "__main__":
     batch_size = 1
     epochs = 5
 
-    training_data = subsample_random(language_classification(), 10000)
+    training_data = subsample_random(language_classification(), 50000)
     testing_data = subsample_random(language_classification(True), 10000)
 
     training_data_loader = DataLoader(
